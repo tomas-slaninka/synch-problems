@@ -1,0 +1,296 @@
+1. Dining Philosophers
+// The Dining Philosophers Problem was proposed by Dijkstra in 1965, when dinosaurs
+// ruled the earth [3]. It appears in a number of variations, but the standard
+// features are a table with five plates, five forks (or chopsticks) and a big
+// bowl of spaghetti. Five philosophers, who represent interacting threads, come
+// to the table and execute the following loop:
+
+while TRUE
+	think()
+	get_forks()
+	eat()
+	put_forks()
+
+sem_t forks[] = Semaphore(1)
+sem_t footman = Semaphore(NUMBER_OF_PHILOSOPHERS - 1)
+
+left(i)
+	return (i + 1) % NUMBER_OF_PHILOSOPHERS
+
+right(i)
+	return i
+
+get_forks(i) // right handed
+	footman.wait()
+	forks[right(i)].wait()
+	forks[left(i)].wait()
+
+put_forks(i) // right handed
+	forks[right(i)].signal()
+	forks[left(i)].signal()
+	footman.signal()
+
+2. Cigarette Smokers
+// Four threads are involved: an agent and three smokers. The smokers loop
+// forever, first waiting for ingredients, then making and smoking cigarettes. The
+// ingredients are tobacco, paper, and matches.
+// We assume that the agent has an infinite supply of all three ingredients, and
+// each smoker has an infinite supply of one of the ingredients; that is, one smoker
+// has matches, another has paper, and the third has tobacco.
+// The agent repeatedly chooses two different ingredients at random and makes
+// them available to the smokers. Depending on which ingredients are chosen, the
+// smoker with the complementary ingredient should pick up both resources and
+// proceed.
+// For example, if the agent puts out tobacco and paper, the smoker with the
+// matches should pick up both ingredients, make a cigarette, and then signal the
+// agent.
+
+// 3 resources
+int res_tobacco = 0
+int res_paper = 0
+int res_matches = 0
+
+pthread_mutex_t mutex
+
+sem_t tobacco = Semaphore(0)
+sem_t paper = Semaphore(0)
+sem_t matches = Semaphore(0)
+
+sem_t tobaccoSmoker = Semaphore(0)
+sem_t matchesSmoker = Semaphore(0)
+sem_t paperSmoker = Semaphore(0)
+
+Agent A
+	tobacco.signal()
+	paper.signal()
+
+Agent B 
+	paper.signal()
+	matches.signal()
+
+Agent C 
+	tobacco.signal()
+	matches.signal()
+
+Smoker with tobacco
+	tobaccoSmoker.wait()
+    makeCigarette()
+    smoke()
+
+Smoker with paper
+	paperSmoker.wait()
+    makeCigarette()
+    smoke()
+
+Smoker with matches
+	matchesSmoker.wait()
+    makeCigarette()
+    smoke()
+
+Pusher with tabacco
+	tobacco.wait()
+    mutex.lock()
+	    if (res_paper > 0)
+	        res_paper--
+	        matchesSmoker.signal()
+	    else if (res_matches > 0)
+	        res_matches--
+	    	paperSmoker.signal()
+	    else
+	        res_tobacco++
+    mutex.unlock()
+
+Pusher with paper
+	paper.wait()
+    mutex.lock()
+	    if (res_tobacco > 0)
+	        res_tobacco--
+	        matchesSmoker.signal()
+	    else if (res_matches > 0)
+	        res_matches--
+	    	tobaccoSmoker.signal()
+	    else
+	        res_paper++
+    mutex.unlock()
+
+Pusher with matches
+	matches.wait()
+    mutex.lock()
+	    if (res_tobacco > 0)
+	        res_tobacco--
+	        paperSmoker.signal()
+	    else if (res_paper > 0)
+	        res_paper--
+	    	tobaccoSmoker.signal()
+	    else
+	        res_matches++
+    mutex.unlock()
+
+3. Dining Savages
+// A tribe of savages eats communal dinners from a large pot that
+// can hold M servings of stewed missionary1. When a savage wants to
+// eat, he helps himself from the pot, unless it is empty. If the pot is
+// empty, the savage wakes up the cook and then waits until the cook
+// has refilled the pot.
+
+// The synchronization constraints are:
+// • Savages cannot invoke getServingFromPot if the pot is empty.
+// • The cook can invoke putServingsInPot only if the pot is empty.
+// Puzzle: Add code for the savages and the cook that satisfies the synchronization
+// constraints.
+
+int servings = 0
+pthread_mutex_t mutex
+sem_t emptyPot = Semaphore(0)
+sem_t fullPot = Semaphore(0)
+
+cook()
+	while TRUE
+		emptyPot.wait()
+			putServingsInPot(M)
+		fullPot.signal()
+
+savage()
+	while TRUE
+		mutex.lock()
+			if (servings == 0)
+				emptyPot.signal()
+				fullPot.wait()
+			servings--
+			getServingFromPot()
+		mutex.unlock()
+		eat()
+
+4. Barbershop
+// • Customer threads should invoke a function named getHairCut.
+// • If a customer thread arrives when the shop is full, it can invoke balk, which does not return.
+// • The barber thread should invoke cutHair.
+// • when the barber invokes cutHair there should be exactly one thread invoking getHairCut concurrently.
+
+const int TOTAL_CUSTOMERS = 4
+int customers = 0
+
+pthread_mutex_t mutex
+sem_t customer = Semaphore(0)
+sem_t barber = Semaphore(0)
+sem_t customerDone = Semaphore(0)
+sem_t barberDone = Semaphore(0)
+
+barber()
+	customer.wait()
+		barber.signal()
+			cutHair()
+		customerDone.wait()
+	barberDone.signal()
+
+customer()
+	mutex.lock()
+		if (customers == TOTAL_CUSTOMERS)
+			mutex.unlock()
+			balk()
+		customers++
+	mutex.unlock()
+	customer.signal()
+		barber.wait()
+			getHairCut()
+		customerDone.signal()
+	barberDone.wait()
+	mutex.lock()
+		customers--
+	mutex.unlock()
+
+5. Search Insert Delete
+// Three kinds of threads share access to a singly-linked list:
+// searchers, inserters and deleters. Searchers merely examine the list;
+// hence they can execute concurrently with each other. Inserters add
+// new items to the end of the list; insertions must be mutually exclusive
+// to preclude two inserters from inserting new items at about
+// the same time. However, one insert can proceed in parallel with
+// any number of searches. Finally, deleters remove items from anywhere
+// in the list. At most one deleter process can access the list at
+// a time, and deletion must also be mutually exclusive with searches
+// and insertions.
+
+pthread_mutex_t insert_mutex
+sem_t no_searcher = Semaphore(1)
+sem_t no_inserter = Semaphore(1)
+LightSwitch searchSwitch = new LightSwitch()
+LightSwitch insertSwitch = new LightSwitch()
+
+searcher()
+	searchSwitch.wait(no_searcher)
+		search()
+	searchSwitch.signal(no_searcher)
+
+inserter()
+	insertSwitch.wait(no_inserter)
+	insert_mutex.lock()
+		insert()
+	insert_mutex.unlock()
+	insertSwitch.signal(no_inserter)
+
+deleter()
+	no_searcher.wait()
+	no_inserter.wait()
+		delete()
+	no_inserter.signal()
+	no_searcher.signal()
+
+6. Unisex Bathroom
+// • There cannot be men and women in the bathroom at the same time.
+// • There should never be more than three employees squandering company
+// time in the bathroom.
+
+sem_t empty Semaphore(1)
+LightSwitch menSwitch = new LightSwitch()
+LightSwitch womenSwitch = new LightSwitch()
+sem_t men_multiplex = Semaphore(3)
+sem_t women_multiplex = Semaphore(3)
+sem_t turnstile = Semaphore(1)
+
+int men_waiting = 0
+int women_waiting = 0
+int person_in_bathroom = 0
+
+women()
+	turnstile.wait()
+		womenSwitch.wait(empty)
+	turnstile.signal()
+	women_multiplex.wait()
+		useBathroom()
+	women_multiplex.signal()
+	womenSwitch.signal(empty)
+
+men()
+	turnstile.wait()
+		menSwitch.wait(empty)
+	turnstile.signal()
+	men_multiplex.wait()
+		useBathroom()
+	men_multiplex.signal()
+	menSwitch.signal(empty)
+
+7. Child care 
+// At a child care center, state regulations require that there is always
+// one adult present for every three children.
+// Puzzle: Write code for child threads and adult threads that enforces this
+// constraint in a critical section.
+
+pthread_mutex_t mutex
+sem_t multiplex = Semaphore(0)
+
+adult()
+	multiplex.signal(3)
+		lookafter()
+	mutex.lock()
+		multiplex.wait()
+		multiplex.wait()
+		multiplex.wait()
+	mutex.unlock()
+	leave()
+
+child()
+	multiplex.wait()
+		play()
+	multiplex.signal()
+	leave()
